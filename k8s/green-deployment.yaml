@@ -1,21 +1,42 @@
-containers:
-  - name: bluegreen-app
-    image: bluegreen-app:v2
-    imagePullPolicy: Never
+apiVersion: apps/v1
+kind: Deployment
 
-    ports:
-      - containerPort: 8080
+metadata:
+  name: green-deployment
 
-    livenessProbe:
-      httpGet:
-        path: /actuator/health/liveness
-        port: 8080
-      initialDelaySeconds: 10
-      periodSeconds: 10
+spec:
+  replicas: 2
 
-    readinessProbe:
-      httpGet:
-        path: /actuator/health/readiness
-        port: 8080
-      initialDelaySeconds: 5
-      periodSeconds: 5
+  selector:
+    matchLabels:
+      app: bluegreen
+      version: green
+
+  template:
+    metadata:
+      labels:
+        app: bluegreen
+        version: green
+
+    spec:
+      containers:
+        - name: bluegreen-app
+          image: bluegreen-app:v2
+          imagePullPolicy: Never
+
+          ports:
+            - containerPort: 8080
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
