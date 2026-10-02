@@ -4,29 +4,73 @@
 
 !\[Java](https://img.shields.io/badge/Java-21-orange)
 
-!\[Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-brightgreen)
+!\[Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-6DB33F)
 
-!\[Docker](https://img.shields.io/badge/Docker-Containerized-blue)
+!\[Docker](https://img.shields.io/badge/Docker-Containerized-2496ED)
 
 !\[Kubernetes](https://img.shields.io/badge/Kubernetes-Blue--Green-326CE5)
 
-
-
-A hands-on DevOps project demonstrating \*\*blue-green deployment of a Spring Boot REST API on Kubernetes\*\*.
-
-
-
-The application is packaged with Docker and deployed as two independent Kubernetes environments:
+!\[Minikube](https://img.shields.io/badge/Minikube-Local%20Cluster-blue)
 
 
 
-\- 🔵 \*\*Blue — version 1.0\*\*
-
-\- 🟢 \*\*Green — version 2.0\*\*
+A hands-on DevOps project demonstrating a \*\*Blue-Green deployment strategy for a containerized Spring Boot REST API on Kubernetes\*\*.
 
 
 
-Traffic is switched between the two versions by changing the Kubernetes Service selector. Before Green receives traffic, an automated PowerShell script checks rollout status and pod readiness to prevent an unhealthy deployment from becoming active.
+The application is packaged as two independently versioned Docker images and deployed as parallel Kubernetes environments:
+
+
+
+\- 🔵 \*\*Blue — v1.0\*\*
+
+\- 🟢 \*\*Green — v2.0\*\*
+
+
+
+Both releases can run simultaneously. A Kubernetes Service controls which deployment receives traffic by selecting pods based on their `version` label.
+
+
+
+Before switching traffic to Green, a PowerShell deployment script validates the Green rollout and verifies that Green pods are actually ready.
+
+
+
+\---
+
+
+
+\## Project Goals
+
+
+
+This project was built to practise how application development, containerization and Kubernetes deployment concepts work together in a realistic release workflow.
+
+
+
+It demonstrates:
+
+
+
+\- containerizing a Spring Boot application with Docker
+
+\- running multiple application versions simultaneously
+
+\- Kubernetes Deployments, Pods and Services
+
+\- labels and selectors for traffic routing
+
+\- liveness and readiness health probes
+
+\- Blue-Green release switching
+
+\- deployment validation before cutover
+
+\- rollback to a previous release
+
+\- PowerShell deployment automation
+
+\- failure-safe traffic switching
 
 
 
@@ -42,35 +86,35 @@ Traffic is switched between the two versions by changing the Kubernetes Service 
 
 flowchart LR
 
-&#x20;   U\[Client] --> S\[Kubernetes Service]
+&#x20;   Client\[Client] --> Service\[Kubernetes Service]
 
 
 
-&#x20;   S -->|version: blue| B\[Blue Deployment<br/>v1.0]
+&#x20;   Service -->|version=blue| Blue\[Blue Deployment<br/>v1.0]
 
-&#x20;   S -.->|version: green| G\[Green Deployment<br/>v2.0]
-
-
-
-&#x20;   B --> B1\[Blue Pod 1]
-
-&#x20;   B --> B2\[Blue Pod 2]
+&#x20;   Service -.->|version=green| Green\[Green Deployment<br/>v2.0]
 
 
 
-&#x20;   G --> G1\[Green Pod 1]
+&#x20;   Blue --> B1\[Blue Pod 1]
 
-&#x20;   G --> G2\[Green Pod 2]
+&#x20;   Blue --> B2\[Blue Pod 2]
+
+
+
+&#x20;   Green --> G1\[Green Pod 1]
+
+&#x20;   Green --> G2\[Green Pod 2]
 
 ```
 
 
 
-Both deployments exist simultaneously.
+Both Kubernetes Deployments contain two replicas.
 
 
 
-The Service routes traffic only to pods matching its active selector:
+The Service initially uses:
 
 
 
@@ -86,19 +130,27 @@ selector:
 
 
 
-Switching to Green changes only:
+Therefore traffic flows to Blue pods.
+
+
+
+After the Green deployment passes validation, the selector becomes:
 
 
 
 ```yaml
 
-version: green
+selector:
+
+&#x20; app: bluegreen
+
+&#x20; version: green
 
 ```
 
 
 
-This allows a new release to be prepared and health-checked before production traffic is redirected.
+The application does not need to be rebuilt during the traffic switch.
 
 
 
@@ -106,37 +158,153 @@ This allows a new release to be prepared and health-checked before production tr
 
 
 
-\## Features
+\## Blue-Green Deployment Flow
 
 
 
-\- Spring Boot REST API
+\### 1. Blue is live
 
-\- Java 21
 
-\- Docker containerization
 
-\- Kubernetes Deployments and Services
+```text
 
-\- Blue-green release strategy
+Client
 
-\- Two replicas per deployment
+&#x20;  │
 
-\- Kubernetes readiness probes
+&#x20;  ▼
 
-\- Kubernetes liveness probes
+Kubernetes Service
 
-\- Spring Boot Actuator health endpoints
+&#x20;  │
 
-\- Automated traffic switching with PowerShell
+&#x20;  │ version=blue
 
-\- Deployment validation before Green cutover
+&#x20;  ▼
 
-\- Fast rollback to Blue
+Blue Deployment
 
-\- Version-specific Docker images generated from the same source code
+&#x20;  ├── Blue Pod 1
 
-\- Local Kubernetes environment using Minikube
+&#x20;  └── Blue Pod 2
+
+```
+
+
+
+The version endpoint returns:
+
+
+
+```json
+
+{
+
+&#x20; "environment": "blue",
+
+&#x20; "version": "1.0"
+
+}
+
+```
+
+
+
+\### 2. Green is deployed alongside Blue
+
+
+
+```text
+
+&#x20;                    ┌── Blue Pod 1
+
+Blue Deployment ─────┤
+
+&#x20;                    └── Blue Pod 2
+
+
+
+&#x20;                    ┌── Green Pod 1
+
+Green Deployment ────┤
+
+&#x20;                    └── Green Pod 2
+
+```
+
+
+
+Blue continues receiving traffic while Green is prepared and checked.
+
+
+
+\### 3. Green is validated
+
+
+
+Before cutover, the deployment script:
+
+
+
+1\. checks the Green Deployment rollout
+
+2\. waits for Green pods to reach the `Ready` condition
+
+3\. stops if Green is unavailable
+
+4\. changes the Service selector only after validation succeeds
+
+
+
+\### 4. Traffic switches to Green
+
+
+
+```text
+
+Client
+
+&#x20;  │
+
+&#x20;  ▼
+
+Kubernetes Service
+
+&#x20;  │
+
+&#x20;  │ version=green
+
+&#x20;  ▼
+
+Green Deployment
+
+&#x20;  ├── Green Pod 1
+
+&#x20;  └── Green Pod 2
+
+```
+
+
+
+The API then returns:
+
+
+
+```json
+
+{
+
+&#x20; "environment": "green",
+
+&#x20; "version": "2.0"
+
+}
+
+```
+
+
+
+Blue remains available for rollback.
 
 
 
@@ -156,7 +324,7 @@ This allows a new release to be prepared and health-checked before production tr
 
 | Spring Boot | REST API |
 
-| Spring Boot Actuator | Health monitoring |
+| Spring Boot Actuator | Application health endpoints |
 
 | Maven | Build and dependency management |
 
@@ -164,111 +332,15 @@ This allows a new release to be prepared and health-checked before production tr
 
 | Kubernetes | Container orchestration |
 
-| Minikube | Local Kubernetes cluster |
+| Minikube | Local Kubernetes environment |
 
 | kubectl | Kubernetes management |
 
 | PowerShell | Deployment automation |
 
-| Git / GitHub | Version control |
+| Git | Version control |
 
-
-
-\---
-
-
-
-\## REST API
-
-
-
-The application contains a small in-memory Task API.
-
-
-
-\### Task endpoints
-
-
-
-| Method | Endpoint | Description |
-
-|---|---|---|
-
-| GET | `/api/tasks` | Retrieve all tasks |
-
-| POST | `/api/tasks` | Create a task |
-
-| PUT | `/api/tasks/{id}` | Update a task |
-
-| DELETE | `/api/tasks/{id}` | Delete a task |
-
-
-
-\### Deployment version
-
-
-
-```http
-
-GET /api/version
-
-```
-
-
-
-Blue response:
-
-
-
-```json
-
-{
-
-&#x20; "environment": "blue",
-
-&#x20; "version": "1.0"
-
-}
-
-```
-
-
-
-Green response:
-
-
-
-```json
-
-{
-
-&#x20; "environment": "green",
-
-&#x20; "version": "2.0"
-
-}
-
-```
-
-
-
-\### Health endpoints
-
-
-
-```text
-
-/actuator/health
-
-/actuator/health/liveness
-
-/actuator/health/readiness
-
-```
-
-
-
-These endpoints are used by Kubernetes to determine whether application containers are alive and ready to receive traffic.
+| GitHub | Source-code hosting |
 
 
 
@@ -290,9 +362,25 @@ springboot-blue-green-k8s/
 
 │   └── main/
 
-│       └── java/
+│       ├── java/
 
-│           └── com/rohan/bluegreen/
+│       │   └── com/rohan/bluegreen/
+
+│       │       ├── controller/
+
+│       │       │   ├── TaskController.java
+
+│       │       │   └── VersionController.java
+
+│       │       └── model/
+
+│       │           └── Task.java
+
+│       │
+
+│       └── resources/
+
+│           └── application.properties
 
 │
 
@@ -328,7 +416,199 @@ springboot-blue-green-k8s/
 
 
 
-\# Running the Project
+\## REST API
+
+
+
+The Spring Boot application contains a small in-memory Task API together with a deployment-version endpoint.
+
+
+
+\### Task endpoints
+
+
+
+| Method | Endpoint | Description |
+
+|---|---|---|
+
+| `GET` | `/api/tasks` | Retrieve all tasks |
+
+| `POST` | `/api/tasks` | Create a task |
+
+| `PUT` | `/api/tasks/{id}` | Update a task |
+
+| `DELETE` | `/api/tasks/{id}` | Delete a task |
+
+
+
+\### Example task
+
+
+
+```json
+
+{
+
+&#x20; "title": "Test Kubernetes deployment",
+
+&#x20; "completed": false
+
+}
+
+```
+
+
+
+> Task data is stored in memory for this project and is therefore reset when the application instance restarts.
+
+
+
+\---
+
+
+
+\## Version Endpoint
+
+
+
+```http
+
+GET /api/version
+
+```
+
+
+
+The response identifies the Docker image/release currently receiving traffic.
+
+
+
+\### Blue
+
+
+
+```json
+
+{
+
+&#x20; "environment": "blue",
+
+&#x20; "version": "1.0"
+
+}
+
+```
+
+
+
+\### Green
+
+
+
+```json
+
+{
+
+&#x20; "environment": "green",
+
+&#x20; "version": "2.0"
+
+}
+
+```
+
+
+
+The version and environment are configurable when the Docker image is built, allowing both releases to be created from the same source code.
+
+
+
+\---
+
+
+
+\## Health Endpoints
+
+
+
+Spring Boot Actuator provides the endpoints used by the Kubernetes probes:
+
+
+
+```text
+
+/actuator/health
+
+/actuator/health/liveness
+
+/actuator/health/readiness
+
+```
+
+
+
+The Kubernetes manifests use:
+
+
+
+\### Liveness probe
+
+
+
+```yaml
+
+livenessProbe:
+
+&#x20; httpGet:
+
+&#x20;   path: /actuator/health/liveness
+
+&#x20;   port: 8080
+
+&#x20; initialDelaySeconds: 10
+
+&#x20; periodSeconds: 10
+
+```
+
+
+
+\### Readiness probe
+
+
+
+```yaml
+
+readinessProbe:
+
+&#x20; httpGet:
+
+&#x20;   path: /actuator/health/readiness
+
+&#x20;   port: 8080
+
+&#x20; initialDelaySeconds: 5
+
+&#x20; periodSeconds: 5
+
+```
+
+
+
+The liveness probe checks whether the application remains operational.
+
+
+
+The readiness probe determines whether a pod is ready to receive traffic.
+
+
+
+\---
+
+
+
+\# Running Locally
 
 
 
@@ -352,9 +632,11 @@ Install:
 
 \- PowerShell
 
+\- Git
 
 
-Verify:
+
+Verify the main tools:
 
 
 
@@ -369,6 +651,8 @@ docker --version
 kubectl version --client
 
 minikube version
+
+git --version
 
 ```
 
@@ -408,7 +692,7 @@ mvn clean package
 
 
 
-This creates:
+The packaged application is created at:
 
 
 
@@ -450,7 +734,7 @@ docker build `
 
 
 
-The same application source is used to create the second release:
+The same source code is used to build the Green release:
 
 
 
@@ -480,15 +764,15 @@ docker images
 
 
 
-You should have:
+You should see:
 
 
 
 ```text
 
-bluegreen-app:v1
+bluegreen-app   v1
 
-bluegreen-app:v2
+bluegreen-app   v2
 
 ```
 
@@ -498,11 +782,11 @@ bluegreen-app:v2
 
 
 
-\# Kubernetes Deployment
+\# Deploying to Minikube
 
 
 
-\## 5. Start Minikube
+\## 5. Start the Kubernetes Cluster
 
 
 
@@ -514,7 +798,7 @@ minikube start --driver=docker
 
 
 
-Verify:
+Verify the node:
 
 
 
@@ -526,11 +810,39 @@ kubectl get nodes
 
 
 
+The Minikube node should report:
+
+
+
+```text
+
+Ready
+
+```
+
+
+
 \---
 
 
 
-\## 6. Load Docker Images into Minikube
+\## 6. Load the Images into Minikube
+
+
+
+The Kubernetes manifests use local Docker images with:
+
+
+
+```yaml
+
+imagePullPolicy: Never
+
+```
+
+
+
+Load both images into Minikube:
 
 
 
@@ -560,7 +872,11 @@ minikube image ls
 
 
 
-\## 7. Deploy Blue
+\## 7. Deploy Blue and Green
+
+
+
+Apply the Blue deployment:
 
 
 
@@ -572,11 +888,7 @@ kubectl apply -f .\\k8s\\blue-deployment.yaml
 
 
 
-\---
-
-
-
-\## 8. Deploy Green
+Apply Green:
 
 
 
@@ -588,11 +900,7 @@ kubectl apply -f .\\k8s\\green-deployment.yaml
 
 
 
-\---
-
-
-
-\## 9. Create the Kubernetes Service
+Create the Service:
 
 
 
@@ -604,7 +912,7 @@ kubectl apply -f .\\k8s\\service.yaml
 
 
 
-Verify everything:
+Verify:
 
 
 
@@ -614,39 +922,21 @@ kubectl get deployments
 
 kubectl get pods
 
-kubectl get service bluegreen-service
+kubectl get services
 
 ```
 
 
 
-Expected architecture:
+The expected deployment state is:
 
 
 
 ```text
 
-blue-deployment
+blue-deployment     2/2
 
-&#x20;├── blue pod
-
-&#x20;└── blue pod
-
-
-
-green-deployment
-
-&#x20;├── green pod
-
-&#x20;└── green pod
-
-
-
-bluegreen-service
-
-&#x20;       │
-
-&#x20;       └── Active deployment
+green-deployment    2/2
 
 ```
 
@@ -656,7 +946,11 @@ bluegreen-service
 
 
 
-\# Accessing the Application
+\## 8. Access the Application
+
+
+
+The Kubernetes Service uses `NodePort`.
 
 
 
@@ -672,11 +966,11 @@ minikube service bluegreen-service --url
 
 
 
-Keep this terminal open.
+Keep that terminal running.
 
 
 
-Minikube will return a local URL similar to:
+Minikube returns a URL similar to:
 
 
 
@@ -688,7 +982,11 @@ http://127.0.0.1:59770
 
 
 
-Test:
+Use the URL returned by your own Minikube session.
+
+
+
+Check which release is active:
 
 
 
@@ -700,7 +998,7 @@ curl.exe http://127.0.0.1:59770/api/version
 
 
 
-When Blue is active:
+Initially the Service targets Blue:
 
 
 
@@ -722,11 +1020,7 @@ When Blue is active:
 
 
 
-\# Blue → Green Deployment
-
-
-
-The Green switching script performs safety checks before modifying production traffic.
+\# Switching Blue → Green
 
 
 
@@ -742,71 +1036,35 @@ Run:
 
 
 
-The script:
-
-
-
-1\. Checks the Green Deployment rollout.
-
-2\. Waits for Green pods to reach the `Ready` condition.
-
-3\. Stops immediately if Green is unhealthy.
-
-4\. Changes the Kubernetes Service selector to Green only after validation.
-
-
-
-Conceptually:
+The script first runs:
 
 
 
 ```text
 
-Current state
-
-
-
-Client
-
-&#x20;  │
-
-&#x20;  ▼
-
-Service
-
-&#x20;  │
-
-&#x20;  ▼
-
-🔵 Blue v1.0
-
-
-
-
-
-After successful validation
-
-
-
-Client
-
-&#x20;  │
-
-&#x20;  ▼
-
-Service
-
-&#x20;  │
-
-&#x20;  ▼
-
-🟢 Green v2.0
+kubectl rollout status deployment/green-deployment
 
 ```
 
 
 
-Verify:
+It then checks that Green pods are actually Ready.
+
+
+
+Only after those checks succeed does it execute the equivalent of:
+
+
+
+```text
+
+kubectl set selector service bluegreen-service app=bluegreen,version=green
+
+```
+
+
+
+Verify the active selector:
 
 
 
@@ -818,11 +1076,13 @@ kubectl describe service bluegreen-service
 
 
 
-The selector should contain:
+The selector should now contain:
 
 
 
 ```text
+
+app=bluegreen
 
 version=green
 
@@ -830,7 +1090,7 @@ version=green
 
 
 
-Test the API again:
+Check the API again using your Minikube URL:
 
 
 
@@ -842,7 +1102,7 @@ curl.exe http://127.0.0.1:59770/api/version
 
 
 
-Expected:
+Expected response:
 
 
 
@@ -864,11 +1124,15 @@ Expected:
 
 
 
-\# Rollback
+\# Failure-Safe Cutover
 
 
 
-If the Green release needs to be withdrawn, traffic can be moved back to Blue:
+The Green switch script is designed to avoid routing traffic to an unavailable Green environment.
+
+
+
+To test this behaviour, first make sure Blue is active:
 
 
 
@@ -880,37 +1144,7 @@ If the Green release needs to be withdrawn, traffic can be moved back to Blue:
 
 
 
-The Service selector becomes:
-
-
-
-```text
-
-app=bluegreen
-
-version=blue
-
-```
-
-
-
-The application therefore returns to Blue without rebuilding or redeploying the Blue application.
-
-
-
-\---
-
-
-
-\# Failure-Safety Test
-
-
-
-A key part of this project is preventing traffic from being routed to an unavailable Green environment.
-
-
-
-Scale Green to zero pods:
+Then deliberately remove all Green replicas:
 
 
 
@@ -922,7 +1156,7 @@ kubectl scale deployment green-deployment --replicas=0
 
 
 
-Try to switch:
+Attempt the Green cutover:
 
 
 
@@ -934,17 +1168,111 @@ Try to switch:
 
 
 
-The readiness check fails because there are no Green pods available.
-
-
-
-The script exits without changing the Service selector:
+Because no Green pods are available, the readiness check fails and the script exits:
 
 
 
 ```text
 
 Green pods are not ready. Traffic will NOT be switched.
+
+```
+
+
+
+The Service remains pointed at Blue.
+
+
+
+Verify:
+
+
+
+```powershell
+
+kubectl describe service bluegreen-service
+
+```
+
+
+
+The selector should still contain:
+
+
+
+```text
+
+version=blue
+
+```
+
+
+
+Restore the Green environment:
+
+
+
+```powershell
+
+kubectl scale deployment green-deployment --replicas=2
+
+```
+
+
+
+Wait for it to become ready:
+
+
+
+```powershell
+
+kubectl wait `
+
+&#x20; --for=condition=Ready `
+
+&#x20; pod `
+
+&#x20; -l app=bluegreen,version=green `
+
+&#x20; --timeout=60s
+
+```
+
+
+
+\---
+
+
+
+\# Rollback
+
+
+
+Because Blue remains deployed while Green is active, traffic can be moved back without rebuilding Blue.
+
+
+
+Run:
+
+
+
+```powershell
+
+.\\scripts\\switch-to-blue.ps1
+
+```
+
+
+
+The script updates the Service selector to:
+
+
+
+```text
+
+app=bluegreen
+
+version=blue
 
 ```
 
@@ -962,39 +1290,85 @@ kubectl describe service bluegreen-service
 
 
 
-Traffic should still target:
+Then call:
+
+
+
+```powershell
+
+curl.exe http://127.0.0.1:59770/api/version
+
+```
+
+
+
+The response returns to:
+
+
+
+```json
+
+{
+
+&#x20; "environment": "blue",
+
+&#x20; "version": "1.0"
+
+}
+
+```
+
+
+
+\---
+
+
+
+\## Why the Additional Readiness Check Matters
+
+
+
+A useful failure case discovered while building this project was that:
 
 
 
 ```text
 
-version=blue
+kubectl rollout status
 
 ```
 
 
 
-Restore Green:
+can report a successful rollout even when a Deployment has intentionally been scaled to zero replicas.
+
+
+
+For that reason, the Green cutover script performs an additional check:
 
 
 
 ```powershell
 
-kubectl scale deployment green-deployment --replicas=2
+kubectl wait `
+
+&#x20; --for=condition=Ready `
+
+&#x20; pod `
+
+&#x20; -l app=bluegreen,version=green `
+
+&#x20; --timeout=60s
 
 ```
 
 
 
-Then:
+If there are no matching Ready Green pods, the command fails and the Service selector is left unchanged.
 
 
 
-```powershell
-
-kubectl wait --for=condition=Ready pod -l app=bluegreen,version=green --timeout=60s
-
-```
+This provides an extra safety check before traffic is redirected.
 
 
 
@@ -1002,59 +1376,69 @@ kubectl wait --for=condition=Ready pod -l app=bluegreen,version=green --timeout=
 
 
 
-\# Kubernetes Health Checks
+\## Docker Version Configuration
 
 
 
-Each deployment contains both \*\*liveness\*\* and \*\*readiness\*\* probes.
+Both releases are produced from the same Java source.
 
 
 
-\### Liveness
+The Dockerfile accepts:
 
 
 
-```yaml
+```dockerfile
 
-livenessProbe:
+ARG APP\_VERSION=1.0
 
-&#x20; httpGet:
-
-&#x20;   path: /actuator/health/liveness
-
-&#x20;   port: 8080
-
-```
+ARG APP\_ENVIRONMENT=blue
 
 
 
-The liveness probe allows Kubernetes to detect an application that is no longer functioning correctly.
+ENV APP\_VERSION=${APP\_VERSION}
 
-
-
-\### Readiness
-
-
-
-```yaml
-
-readinessProbe:
-
-&#x20; httpGet:
-
-&#x20;   path: /actuator/health/readiness
-
-&#x20;   port: 8080
+ENV APP\_ENVIRONMENT=${APP\_ENVIRONMENT}
 
 ```
 
 
 
-The readiness probe determines whether a pod should receive traffic.
+Spring Boot reads those values through:
 
 
 
-This is especially important during a blue-green deployment because a release should not receive production traffic until it is ready.
+```java
+
+@Value("${app.version:1.0}")
+
+private String version;
+
+
+
+@Value("${app.environment:blue}")
+
+private String environment;
+
+```
+
+
+
+This makes it possible to build:
+
+
+
+```text
+
+bluegreen-app:v1 → Blue  / 1.0
+
+bluegreen-app:v2 → Green / 2.0
+
+```
+
+
+
+without manually modifying the Java source between builds.
 
 
 
@@ -1062,45 +1446,101 @@ This is especially important during a blue-green deployment because a release sh
 
 
 
-\# What I Learned
+\## Kubernetes Labels and Traffic Routing
 
 
 
-This project helped me understand how several DevOps concepts work together rather than treating them as isolated tools.
+Blue pods use:
 
 
 
-Key areas explored:
+```yaml
+
+labels:
+
+&#x20; app: bluegreen
+
+&#x20; version: blue
+
+```
 
 
 
-\- building and packaging a Java application with Maven
+Green pods use:
 
-\- containerizing applications with Docker
 
-\- Docker image versioning
 
-\- Kubernetes Deployments, Pods and Services
+```yaml
 
-\- Kubernetes labels and selectors
+labels:
 
-\- health checks using liveness and readiness probes
+&#x20; app: bluegreen
 
-\- traffic routing using Service selectors
+&#x20; version: green
 
-\- blue-green deployment strategies
+```
 
-\- deployment rollback
+
+
+The Service always selects:
+
+
+
+```text
+
+app=bluegreen
+
+```
+
+
+
+and changes only the `version` selector.
+
+
+
+This is the mechanism used to perform the Blue-Green traffic switch.
+
+
+
+\---
+
+
+
+\## Key Learning Outcomes
+
+
+
+This project provided practical experience with:
+
+
+
+\- Java application packaging using Maven
+
+\- Docker image creation and tagging
+
+\- container environment configuration
+
+\- Kubernetes Deployments and Pods
+
+\- Kubernetes Services
+
+\- labels and selectors
+
+\- liveness and readiness probes
+
+\- Blue-Green deployment concepts
 
 \- release validation
 
+\- traffic switching
+
+\- rollback strategies
+
 \- PowerShell automation
 
-\- debugging container and Kubernetes configuration issues
+\- debugging Docker and Kubernetes issues
 
-
-
-One important lesson was that a successful Kubernetes rollout command alone is not always enough to prove that an environment is ready to receive traffic. The deployment automation therefore performs an additional pod-readiness check before switching the Service selector.
+\- designing deployment safeguards
 
 
 
@@ -1108,27 +1548,85 @@ One important lesson was that a successful Kubernetes rollout command alone is n
 
 
 
-\# Future Improvements
+\## Current Scope
 
 
 
-Possible extensions include:
+This project intentionally focuses on the core Blue-Green deployment workflow using a local Kubernetes environment.
 
 
 
-\- GitHub Actions CI/CD
+Current implementation:
 
-\- automated Docker image publishing
+
+
+```text
+
+Spring Boot
+
+&#x20;    │
+
+&#x20;    ▼
+
+Docker Images
+
+&#x20;    │
+
+&#x20;    ▼
+
+Minikube / Kubernetes
+
+&#x20;    │
+
+&#x20;    ├── Blue Deployment
+
+&#x20;    ├── Green Deployment
+
+&#x20;    │
+
+&#x20;    ▼
+
+Kubernetes Service
+
+```
+
+
+
+Cloud deployment is not required to run or demonstrate the project.
+
+
+
+\---
+
+
+
+\## Future Improvements
+
+
+
+Potential extensions include:
+
+
+
+\- GitHub Actions CI/CD pipeline
+
+\- automated Docker image builds
+
+\- container registry integration
+
+\- Helm packaging
 
 \- Kubernetes Ingress
 
-\- Helm charts
+\- Prometheus metrics
 
-\- Prometheus and Grafana monitoring
+\- Grafana dashboards
 
-\- cloud deployment using AKS
+\- automated API tests before cutover
 
-\- automated integration tests before cutover
+\- automatic rollback on failed validation
+
+\- deployment to a managed Kubernetes service such as AKS
 
 
 
@@ -1141,10 +1639,6 @@ Possible extensions include:
 
 
 \*\*Rohan Hanumanthappa Channagouder\*\*
-
-
-
-MSc Advanced Computer Science — University of York
 
 
 
