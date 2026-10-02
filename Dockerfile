@@ -1,5 +1,8 @@
 FROM eclipse-temurin:21-jre
 
+LABEL org.opencontainers.image.source="https://github.com/Rohan-HC/springboot-blue-green-k8s"
+LABEL org.opencontainers.image.description="Spring Boot Blue-Green deployment on Kubernetes"
+
 WORKDIR /app
 
 COPY target/bluegreen-0.0.1-SNAPSHOT.jar app.jar
